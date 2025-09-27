@@ -118,9 +118,9 @@
                     </div>
                 </div>
                 <div id="real-time-map" class="map-container bg-gray-200 flex items-center justify-center">
-                    <p class="text-gray-500">Loading real-time traffic map...</p>
+                    <p class="text-gray-500" id="real-time-map-status">Loading real-time traffic map...</p>
                 </div>
-            </div>
+</div>
 
             <!-- Interactive Traffic Map -->
             <div class="bg-white rounded-xl p-4 shadow-lg">
@@ -134,9 +134,9 @@
                     </div>
                 </div>
                 <div id="interactive-map" class="map-container relative bg-gray-200 flex items-center justify-center">
-                    <p class="text-gray-500">Loading interactive map...</p>
+                    <p class="text-gray-500" id="interactive-map-status">Loading interactive map...</p>
                 </div>
-            </div>
+</div>
         </div>
 
         <!-- Toolbox and Suggestions -->
@@ -198,11 +198,9 @@
             <p class="text-sm text-gray-400 mt-2">Data provided by Google Maps API | Not affiliated with any government traffic agencies</p>
         </div>
     </footer>
-
     <!-- Google Maps API -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDQb8LAHNYlNqhBYLrcC0XYBGYEjuCOwtg&libraries=places,traffic&callback=initApp" async defer></script>
-    
-    <script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDQb8LAHNYlNqhBYLrcC0XYBGYEjuCOwtg&libraries=places,traffic" async defer></script>
+<script>
         // Initialize Feather Icons
         feather.replace();
         
@@ -226,8 +224,8 @@
                 }
                 
                 // Clear loading text
-                realTimeMapEl.innerHTML = '';
-                interactiveMapEl.innerHTML = '';
+                document.getElementById('real-time-map-status').textContent = 'Initializing map...';
+                document.getElementById('interactive-map-status').textContent = 'Initializing map...';
                 
                 // Real-time traffic map
                 realTimeMap = new google.maps.Map(realTimeMapEl, {
@@ -251,28 +249,33 @@
                 const interactiveTrafficLayer = new google.maps.TrafficLayer();
                 interactiveTrafficLayer.setMap(interactiveMap);
                 
+                // Clear loading text
+                document.getElementById('real-time-map-status').style.display = 'none';
+                document.getElementById('interactive-map-status').style.display = 'none';
+                
                 console.log("Maps initialized successfully at specified location");
             } catch (error) {
                 console.error("Error initializing maps:", error);
-                alert("Error loading Google Maps. Please check your API key and try again.");
+                document.getElementById('real-time-map-status').textContent = 'Error loading map. Please check console.';
+                document.getElementById('interactive-map-status').textContent = 'Error loading map. Please check console.';
             }
         }
-        
-        // Initialize the application
-        function initApp() {
-            // Wait for Google Maps to load
-            if (typeof google === 'undefined' || typeof google.maps === 'undefined') {
-                setTimeout(initApp, 100);
-                return;
+// Initialize the application when Google Maps is loaded
+        window.addEventListener('load', function() {
+            function checkGoogleMaps() {
+                if (typeof google !== 'undefined' && typeof google.maps !== 'undefined') {
+                    initMaps();
+                    setupDragAndDrop();
+                    setupEventListeners();
+                    startTrafficSimulation();
+                    updateCongestionMeter();
+                } else {
+                    setTimeout(checkGoogleMaps, 100);
+                }
             }
-            initMaps();
-            setupDragAndDrop();
-            setupEventListeners();
-            startTrafficSimulation();
-            updateCongestionMeter();
-        }
-        
-        // Set up drag and drop functionality
+            checkGoogleMaps();
+        });
+// Set up drag and drop functionality
         function setupDragAndDrop() {
             // Load interact.js if not already loaded
             if (typeof interact === 'undefined') {
@@ -554,9 +557,6 @@
                 container.appendChild(suggestionElement);
             }
         }
-        
-        // Initialize the app when the window loads
-        window.initApp = initApp;
-    </script>
+</script>
 </body>
 </html>
