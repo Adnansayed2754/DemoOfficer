@@ -19,6 +19,8 @@
     .toolbox-item {
         transition: all 0.3s ease;
         cursor: grab;
+        /* Ensure the element is positioned so transform works */
+        position: relative; 
     }
     .toolbox-item:active {
         cursor: grabbing;
@@ -199,7 +201,7 @@
     // Global variables
     let realTimeMap, interactiveMap;
     let directionsService; 
-    let roadsService; // NEW: Google Maps Roads Service
+    let roadsService; 
     let currentLocation = { lat: 18.5204, lng: 73.8567 }; // Pune, India (A more central location)
     let placedElements = [];
     let congestionLevel = 'low';
@@ -249,7 +251,7 @@
                 mapTypeId: 'roadmap'
             });
 
-            // NEW: Initialize the Directions Service and Roads Service
+            // Initialize the Directions Service and Roads Service
             directionsService = new google.maps.DirectionsService();
             roadsService = new google.maps.roads.RoadsService();
 
@@ -276,7 +278,7 @@
         }
     }
 
-    // FIXED: Function to draw the simulated traffic flow line along a real road
+    // Function to draw the simulated traffic flow line along a real road
     function drawSimulatedTrafficFlow() {
         // Define a route (start to end point) near the center of the map
         const startPoint = { lat: currentLocation.lat - 0.005, lng: currentLocation.lng - 0.005 };
@@ -308,7 +310,7 @@
         });
     }
 
-    // Function to update the simulated traffic line's color and thickness
+    // UPDATED: Function to update the simulated traffic line's color and thickness based on tools
     function updateSimulatedTrafficFlow() {
         if (!simulatedTrafficPolyline) return;
 
@@ -316,34 +318,39 @@
         let weight = 10;
         let dash = [];
 
-        // Adjust appearance based on actual/simulated congestion level
+        // Check for tools that increase congestion/traffic flow disruption
+        const isBlocked = placedElements.some(el => el.type === 'road-block' || el.type === 'construction' || el.type === 'obstacle');
+        // Check for tools that mitigate/manage traffic flow
+        const isMitigated = placedElements.some(el => el.type === 'traffic-light' || el.type === 'speed-limit' || el.type === 'lane-change');
+
+        // Base congestion simulation
         switch (congestionLevel) {
             case 'medium':
-                color = '#f59e0b'; // Yellow for medium
+                color = '#f59e0b'; 
                 weight = 12;
                 break;
             case 'high':
-                color = '#ef4444'; // Red for high
+                color = '#ef4444'; 
                 weight = 14;
-                // Simple logic: if any 'mitigating' tool is placed, improve the road appearance slightly
-                const isMitigated = placedElements.some(el => el.type === 'traffic-light' || el.type === 'speed-limit' || el.type === 'lane-change');
-                // Check for 'blocking' tools
-                const isBlocked = placedElements.some(el => el.type === 'road-block' || el.type === 'construction' || el.type === 'obstacle');
-                
-                if (isMitigated) {
-                    color = '#f59e0b'; // Improvement: back to yellow
-                    weight = 10;
-                }
-                if (isBlocked) {
-                    dash = [15, 5]; // Simulate a detour or blockage
-                }
                 break;
+        }
+
+        // Tool-based visual modifications
+        if (isBlocked) {
+            // Blocking tools override the color to red/orange and add a dashed effect
+            color = (congestionLevel === 'high') ? '#b91c1c' : '#f97316'; // Darker red/Orange
+            weight = 16;
+            dash = [15, 5]; // Simulate a detour or blockage
+        } else if (isMitigated && congestionLevel !== 'low') {
+            // Mitigation tools reduce the visual severity (e.g., greenify/slim down)
+            color = '#10b981'; // Back to green/blue
+            weight = 8; 
         }
 
         simulatedTrafficPolyline.setOptions({
             strokeColor: color,
             strokeWeight: weight,
-            // Only add an arrow for detour simulation
+            // Only add an arrow for detour/blockage simulation
             icons: dash.length > 0 ? [{
                 icon: {
                     path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
@@ -356,7 +363,7 @@
         });
     }
 
-    // Set up drag and drop functionality (no changes needed here)
+    // FIXED: Corrected the drag and drop functionality
     function setupDragAndDrop() {
         interact('.toolbox-item').draggable({
             inertia: true,
@@ -364,6 +371,7 @@
             listeners: {
                 move: dragMoveListener,
                 end: (event) => {
+                    const target = event.target;
                     const interactiveMapRect = document.getElementById('interactive-map').getBoundingClientRect();
                     
                     if (event.client.x > interactiveMapRect.left && event.client.x < interactiveMapRect.right &&
@@ -376,13 +384,14 @@
                         
                         const latLng = fromPointToLatLng(mapPoint);
                         if (latLng) {
-                            placeElementOnMap(event.target.dataset.type, latLng);
+                            placeElementOnMap(target.dataset.type, latLng);
                         }
                     }
                     
-                    event.target.style.transform = 'translate(0px, 0px)';
-                    event.target.setAttribute('data-x', 0);
-                    event.target.setAttribute('data-y', 0);
+                    // Reset the toolbox item's position
+                    target.style.transform = 'translate(0px, 0px)';
+                    target.setAttribute('data-x', 0);
+                    target.setAttribute('data-y', 0);
                 }
             }
         });
@@ -395,12 +404,17 @@
         });
     }
 
-    // Drag move listener (no changes needed here)
+    // Drag move listener - NO CHANGE
     function dragMoveListener(event) {
         const target = event.target;
+        // Keep the dragged position in the data-x/data-y attributes
         const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
         const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+        
+        // Translate the element
         target.style.transform = `translate(${x}px, ${y}px)`;
+
+        // Update the position attributes
         target.setAttribute('data-x', x);
         target.setAttribute('data-y', y);
     }
@@ -414,7 +428,7 @@
         return projection.fromContainerPixelToLatLng(point);
     }
 
-    // MODIFIED: This function now uses the Roads API to snap the marker to the road
+    // Function to snap the marker to the road and place the element
     function placeElementOnMap(type, position) {
         if (!interactiveMap) return;
         
@@ -459,7 +473,7 @@
                 const placedElement = { id: elementId, type: type, marker, effect };
                 placedElements.push(placedElement);
                 
-                updateSimulatedTrafficFlow();
+                updateSimulatedTrafficFlow(); // **Crucial call to update map visually**
 
                 // Add right-click listener to remove the element and its effect
                 marker.addListener('rightclick', () => {
@@ -487,7 +501,7 @@
                         createTrafficEffect(type, newPosition, (newEffect) => {
                             placedElement.effect = newEffect;
                         });
-                        updateSimulatedTrafficFlow();
+                        updateSimulatedTrafficFlow(); // **Crucial call to update map visually**
                     });
                 });
             });
@@ -506,6 +520,7 @@
             case 'lane-change':
                 // For road-based tools, show a short segment of the road
                 const requestOptions = {
+                    // Create a small bounding box around the drop point to get a local road segment
                     origin: {lat: position.lat() + 0.0002, lng: position.lng() + 0.0002},
                     destination: {lat: position.lat() - 0.0002, lng: position.lng() - 0.0002},
                     travelMode: google.maps.TravelMode.DRIVING
@@ -577,7 +592,7 @@
                 element.effect.setMap(null); 
             }
             placedElements.splice(index, 1); 
-            updateSimulatedTrafficFlow();
+            updateSimulatedTrafficFlow(); // **Crucial call to update map visually**
         }
     }
 
